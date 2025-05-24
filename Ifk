@@ -1,0 +1,909 @@
+--[[
+    Modern Notification System
+    A beautiful, detailed notification GUI system with Fredoka One font
+    
+    Features:
+    - Multiple notification types (success, info, warning, error)
+    - Smooth animations for entrance/exit
+    - Queue management for multiple notifications
+    - Auto-dismiss with configurable timers
+    - Position customization
+    - Interactive elements
+    - Sound effects
+]]
+
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+
+-- Constants
+local NotificationSystem = {}
+NotificationSystem.__index = NotificationSystem
+
+-- Configuration
+local CONFIG = {
+    -- Appearance
+    CORNER_RADIUS = UDim.new(0, 16),
+    STROKE_THICKNESS = 1.5,
+    MAX_WIDTH = 320,
+    MIN_HEIGHT = 80,
+    PADDING = 16,
+    ICON_SIZE = 24,
+    FONT_TITLE = Enum.Font.FredokaOne,
+    FONT_BODY = Enum.Font.GothamMedium,
+    FONT_SIZE_TITLE = 18,
+    FONT_SIZE_BODY = 14,
+    
+    -- Animation
+    TWEEN_IN_TIME = 0.4,
+    TWEEN_OUT_TIME = 0.3,
+    TWEEN_INFO_IN = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    TWEEN_INFO_OUT = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+    
+    -- Timing
+    DEFAULT_DURATION = 5,
+    MIN_DURATION = 3,
+    MAX_DURATION = 20,
+    QUEUE_CHECK_INTERVAL = 0.1,
+    
+    -- Positioning
+    DEFAULT_POSITION = "TopRight",
+    POSITIONS = {
+        TopRight = {
+            AnchorPoint = Vector2.new(1, 0),
+            Position = UDim2.new(1, -24, 0, 24),
+            Growth = "Down"
+        },
+        TopLeft = {
+            AnchorPoint = Vector2.new(0, 0),
+            Position = UDim2.new(0, 24, 0, 24),
+            Growth = "Down"
+        },
+        BottomRight = {
+            AnchorPoint = Vector2.new(1, 1),
+            Position = UDim2.new(1, -24, 1, -24),
+            Growth = "Up"
+        },
+        BottomLeft = {
+            AnchorPoint = Vector2.new(0, 1),
+            Position = UDim2.new(0, 24, 1, -24),
+            Growth = "Up"
+        }
+    },
+    
+    -- Colors
+    COLORS = {
+        Success = {
+            Background = Color3.fromRGB(236, 253, 245),  -- Light green
+            Icon = Color3.fromRGB(16, 185, 129),         -- Medium green
+            Accent = Color3.fromRGB(4, 120, 87),         -- Dark green
+            Text = Color3.fromRGB(6, 95, 70)             -- Very dark green
+        },
+        Info = {
+            Background = Color3.fromRGB(239, 246, 255),  -- Light blue
+            Icon = Color3.fromRGB(59, 130, 246),         -- Medium blue
+            Accent = Color3.fromRGB(37, 99, 235),        -- Dark blue
+            Text = Color3.fromRGB(30, 64, 175)           -- Very dark blue
+        },
+        Warning = {
+            Background = Color3.fromRGB(255, 251, 235),  -- Light yellow
+            Icon = Color3.fromRGB(245, 158, 11),         -- Medium yellow
+            Accent = Color3.fromRGB(217, 119, 6),        -- Dark yellow
+            Text = Color3.fromRGB(180, 83, 9)            -- Very dark yellow
+        },
+        Error = {
+            Background = Color3.fromRGB(254, 242, 242),  -- Light red
+            Icon = Color3.fromRGB(239, 68, 68),          -- Medium red
+            Accent = Color3.fromRGB(220, 38, 38),        -- Dark red
+            Text = Color3.fromRGB(185, 28, 28)           -- Very dark red
+        }
+    },
+    
+    -- Icons (using string representation for simplicity)
+    ICONS = {
+        Success = "rbxassetid://7733658504",  -- Checkmark icon
+        Info = "rbxassetid://7733717447",     -- Info icon
+        Warning = "rbxassetid://7733776156",  -- Warning icon
+        Error = "rbxassetid://7733658053"     -- X icon
+    },
+    
+    -- Sounds
+    SOUNDS = {
+        Success = {
+            SoundId = "rbxassetid://6518811702",  -- Soft success sound
+            Volume = 0.5
+        },
+        Info = {
+            SoundId = "rbxassetid://6518819341",  -- Soft bell sound
+            Volume = 0.5
+        },
+        Warning = {
+            SoundId = "rbxassetid://6518812313",  -- Alert sound
+            Volume = 0.6
+        },
+        Error = {
+            SoundId = "rbxassetid://6518729012",  -- Error sound
+            Volume = 0.7
+        }
+    }
+}
+
+-- Utility Functions
+local function createSound(soundConfig)
+    local sound = Instance.new("Sound")
+    sound.SoundId = soundConfig.SoundId
+    sound.Volume = soundConfig.Volume
+    sound.Parent = SoundService
+    return sound
+end
+
+local function playSound(soundType)
+    local soundConfig = CONFIG.SOUNDS[soundType]
+    local sound = createSound(soundConfig)
+    sound:Play()
+    
+    -- Clean up sound after playing
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+end
+
+local function getTextSize(text, fontSize, font, maxWidth)
+    return TextService:GetTextSize(
+        text,
+        fontSize,
+        font,
+        Vector2.new(maxWidth, 10000)
+    )
+end
+
+-- Create UI Components
+local function createNotificationContainer(parent)
+    local container = Instance.new("ScreenGui")
+    container.Name = "NotificationContainer"
+    container.ResetOnSpawn = false
+    container.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    -- Use correct parent based on context
+    if RunService:IsStudio() and not RunService:IsRunning() then
+        container.Parent = parent
+    else
+        -- Handle in-game context
+        if RunService:IsClient() then
+            container.Parent = parent:WaitForChild("PlayerGui")
+        end
+    end
+    
+    return container
+end
+
+local function createNotificationFrame(notifType, position)
+    local posConfig = CONFIG.POSITIONS[position]
+    local colorScheme = CONFIG.COLORS[notifType]
+    
+    -- Main Frame
+    local frame = Instance.new("Frame")
+    frame.Name = "Notification_" .. notifType
+    frame.Size = UDim2.new(0, CONFIG.MAX_WIDTH, 0, CONFIG.MIN_HEIGHT)
+    frame.BackgroundColor3 = colorScheme.Background
+    frame.BackgroundTransparency = 0.1
+    frame.AnchorPoint = posConfig.AnchorPoint
+    frame.Position = posConfig.Position
+    frame.BorderSizePixel = 0
+    frame.ZIndex = 10
+    
+    -- Add corner radius
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = CONFIG.CORNER_RADIUS
+    corner.Parent = frame
+    
+    -- Add subtle stroke
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = colorScheme.Accent
+    stroke.Transparency = 0.7
+    stroke.Thickness = CONFIG.STROKE_THICKNESS
+    stroke.Parent = frame
+    
+    -- Add subtle shadow
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+    shadow.BackgroundTransparency = 1
+    shadow.Position = UDim2.new(0.5, 0, 0.5, 4)
+    shadow.Size = UDim2.new(1, 16, 1, 16)
+    shadow.ZIndex = 9
+    shadow.Image = "rbxassetid://6014261993"  -- Soft shadow image
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.8
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(49, 49, 450, 450)
+    shadow.Parent = frame
+    
+    -- Create Content Container
+    local contentContainer = Instance.new("Frame")
+    contentContainer.Name = "ContentContainer"
+    contentContainer.BackgroundTransparency = 1
+    contentContainer.Size = UDim2.new(1, 0, 1, 0)
+    contentContainer.ZIndex = 11
+    contentContainer.Parent = frame
+    
+    -- Add padding to content
+    local padding = Instance.new("UIPadding")
+    padding.PaddingTop = UDim.new(0, CONFIG.PADDING)
+    padding.PaddingBottom = UDim.new(0, CONFIG.PADDING)
+    padding.PaddingLeft = UDim.new(0, CONFIG.PADDING)
+    padding.PaddingRight = UDim.new(0, CONFIG.PADDING)
+    padding.Parent = contentContainer
+    
+    -- Icon
+    local icon = Instance.new("ImageLabel")
+    icon.Name = "Icon"
+    icon.BackgroundTransparency = 1
+    icon.Size = UDim2.new(0, CONFIG.ICON_SIZE, 0, CONFIG.ICON_SIZE)
+    icon.Position = UDim2.new(0, 0, 0, 0)
+    icon.Image = CONFIG.ICONS[notifType]
+    icon.ImageColor3 = colorScheme.Icon
+    icon.ZIndex = 12
+    icon.Parent = contentContainer
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.BackgroundTransparency = 1
+    title.Position = UDim2.new(0, CONFIG.ICON_SIZE + 12, 0, 0)
+    title.Size = UDim2.new(1, -(CONFIG.ICON_SIZE + 12 + CONFIG.PADDING + 24), 0, CONFIG.FONT_SIZE_TITLE + 2)
+    title.Font = CONFIG.FONT_TITLE
+    title.TextSize = CONFIG.FONT_SIZE_TITLE
+    title.TextColor3 = colorScheme.Accent
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextYAlignment = Enum.TextYAlignment.Top
+    title.Text = ""  -- Will be set later
+    title.ZIndex = 12
+    title.Parent = contentContainer
+    
+    -- Message
+    local message = Instance.new("TextLabel")
+    message.Name = "Message"
+    message.BackgroundTransparency = 1
+    message.Position = UDim2.new(0, CONFIG.ICON_SIZE + 12, 0, CONFIG.FONT_SIZE_TITLE + 4)
+    message.Size = UDim2.new(1, -(CONFIG.ICON_SIZE + 12), 0, CONFIG.FONT_SIZE_BODY * 2)
+    message.Font = CONFIG.FONT_BODY
+    message.TextSize = CONFIG.FONT_SIZE_BODY
+    message.TextColor3 = colorScheme.Text
+    message.TextXAlignment = Enum.TextXAlignment.Left
+    message.TextYAlignment = Enum.TextYAlignment.Top
+    message.TextWrapped = true
+    message.Text = ""  -- Will be set later
+    message.ZIndex = 12
+    message.Parent = contentContainer
+    
+    -- Close Button
+    local closeButton = Instance.new("ImageButton")
+    closeButton.Name = "CloseButton"
+    closeButton.BackgroundTransparency = 1
+    closeButton.Position = UDim2.new(1, -24, 0, 0)
+    closeButton.Size = UDim2.new(0, 24, 0, 24)
+    closeButton.Image = "rbxassetid://7733658053"  -- X icon
+    closeButton.ImageColor3 = colorScheme.Accent
+    closeButton.ImageTransparency = 0.4
+    closeButton.ZIndex = 12
+    closeButton.Parent = contentContainer
+    
+    -- Progress Bar (for auto-dismiss)
+    local progressBarContainer = Instance.new("Frame")
+    progressBarContainer.Name = "ProgressBarContainer"
+    progressBarContainer.BackgroundColor3 = colorScheme.Accent
+    progressBarContainer.BackgroundTransparency = 0.9
+    progressBarContainer.BorderSizePixel = 0
+    progressBarContainer.Position = UDim2.new(0, 0, 1, -2)
+    progressBarContainer.Size = UDim2.new(1, 0, 0, 2)
+    progressBarContainer.ZIndex = 12
+    progressBarContainer.Parent = frame
+    
+    local progressBar = Instance.new("Frame")
+    progressBar.Name = "ProgressBar"
+    progressBar.BackgroundColor3 = colorScheme.Accent
+    progressBar.BackgroundTransparency = 0.3
+    progressBar.BorderSizePixel = 0
+    progressBar.Size = UDim2.new(1, 0, 1, 0)
+    progressBar.ZIndex = 13
+    progressBar.Parent = progressBarContainer
+    
+    return frame
+end
+
+-- Notification Class
+local Notification = {}
+Notification.__index = Notification
+
+function Notification.new(player, notifType, title, message, duration, position, actions)
+    local self = setmetatable({}, Notification)
+    
+    -- Set properties
+    self.Player = player
+    self.Type = notifType or "Info"
+    self.Title = title or "Notification"
+    self.Message = message or ""
+    self.Duration = duration or CONFIG.DEFAULT_DURATION
+    self.Position = position or CONFIG.DEFAULT_POSITION
+    self.Actions = actions or {}
+    self.IsVisible = false
+    self.IsDismissed = false
+    
+    -- Create UI
+    self:CreateUI()
+    
+    return self
+end
+
+function Notification:CreateUI()
+    -- Get container (create if needed)
+    local player = self.Player
+    local playerGui = player:FindFirstChild("PlayerGui")
+    
+    if not playerGui then
+        warn("PlayerGui not found for", player.Name)
+        return
+    end
+    
+    local container = playerGui:FindFirstChild("NotificationContainer")
+    if not container then
+        container = createNotificationContainer(player)
+    end
+    
+    -- Create notification frame
+    self.Frame = createNotificationFrame(self.Type, self.Position)
+    
+    -- Update content
+    local contentContainer = self.Frame.ContentContainer
+    contentContainer.Title.Text = self.Title
+    contentContainer.Message.Text = self.Message
+    
+    -- Adjust size based on content
+    self:UpdateSize()
+    
+    -- Set up close button
+    local closeButton = contentContainer.CloseButton
+    closeButton.MouseButton1Click:Connect(function()
+        self:Dismiss()
+    end)
+    
+    -- Handle actions if provided
+    if #self.Actions > 0 then
+        self:CreateActionButtons()
+    end
+    
+    -- Store reference for later
+    self.Container = container
+    
+    -- Initially invisible (will be shown when displayed)
+    self.Frame.BackgroundTransparency = 1
+    self.Frame.UIStroke.Transparency = 1
+    self.Frame.Shadow.ImageTransparency = 1
+    
+    for _, child in pairs(contentContainer:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child.BackgroundTransparency = 1
+            
+            if child:IsA("TextLabel") or child:IsA("TextButton") then
+                child.TextTransparency = 1
+            elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                child.ImageTransparency = 1
+            end
+        end
+    end
+    
+    -- Progress bar starts invisible
+    self.Frame.ProgressBarContainer.BackgroundTransparency = 1
+    self.Frame.ProgressBarContainer.ProgressBar.BackgroundTransparency = 1
+end
+
+function Notification:UpdateSize()
+    local contentContainer = self.Frame.ContentContainer
+    local titleHeight = getTextSize(
+        self.Title,
+        CONFIG.FONT_SIZE_TITLE,
+        CONFIG.FONT_TITLE,
+        CONFIG.MAX_WIDTH - (CONFIG.ICON_SIZE + 12 + CONFIG.PADDING + 24)
+    ).Y
+    
+    local messageHeight = getTextSize(
+        self.Message,
+        CONFIG.FONT_SIZE_BODY,
+        CONFIG.FONT_BODY,
+        CONFIG.MAX_WIDTH - (CONFIG.ICON_SIZE + 12 + CONFIG.PADDING)
+    ).Y
+    
+    local actionsHeight = #self.Actions > 0 and 40 or 0
+    local contentHeight = math.max(
+        CONFIG.ICON_SIZE,
+        titleHeight + messageHeight + 8 + actionsHeight
+    )
+    
+    local totalHeight = contentHeight + (CONFIG.PADDING * 2)
+    totalHeight = math.max(totalHeight, CONFIG.MIN_HEIGHT)
+    
+    self.Frame.Size = UDim2.new(0, CONFIG.MAX_WIDTH, 0, totalHeight)
+    
+    -- Update message size
+    contentContainer.Message.Size = UDim2.new(
+        1, 
+        -(CONFIG.ICON_SIZE + 12), 
+        0, 
+        messageHeight
+    )
+    
+    -- Update action buttons position if needed
+    if #self.Actions > 0 then
+        local actionsContainer = contentContainer:FindFirstChild("ActionsContainer")
+        if actionsContainer then
+            actionsContainer.Position = UDim2.new(
+                0,
+                CONFIG.ICON_SIZE + 12,
+                0,
+                titleHeight + messageHeight + 16
+            )
+        end
+    end
+end
+
+function Notification:CreateActionButtons()
+    local contentContainer = self.Frame.ContentContainer
+    
+    -- Create container for buttons
+    local actionsContainer = Instance.new("Frame")
+    actionsContainer.Name = "ActionsContainer"
+    actionsContainer.BackgroundTransparency = 1
+    actionsContainer.Position = UDim2.new(0, CONFIG.ICON_SIZE + 12, 0, 0)  -- Position will be updated in UpdateSize
+    actionsContainer.Size = UDim2.new(1, -(CONFIG.ICON_SIZE + 12), 0, 32)
+    actionsContainer.ZIndex = 12
+    actionsContainer.Parent = contentContainer
+    
+    -- Create buttons
+    local buttonWidth = (CONFIG.MAX_WIDTH - (CONFIG.ICON_SIZE + 12 + CONFIG.PADDING)) / #self.Actions
+    
+    for i, action in ipairs(self.Actions) do
+        local button = Instance.new("TextButton")
+        button.Name = "ActionButton_" .. i
+        button.Position = UDim2.new(0, (i-1) * buttonWidth, 0, 0)
+        button.Size = UDim2.new(0, buttonWidth - 8, 0, 32)
+        button.BackgroundColor3 = CONFIG.COLORS[self.Type].Accent
+        button.BackgroundTransparency = 0.8
+        button.Text = action.Text
+        button.TextColor3 = CONFIG.COLORS[self.Type].Accent
+        button.Font = CONFIG.FONT_BODY
+        button.TextSize = CONFIG.FONT_SIZE_BODY
+        button.ZIndex = 13
+        button.Parent = actionsContainer
+        
+        -- Add corner radius
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = button
+        
+        -- Connect callback
+        button.MouseButton1Click:Connect(function()
+            if typeof(action.Callback) == "function" then
+                action.Callback()
+            end
+            
+            if action.DismissOnClick then
+                self:Dismiss()
+            end
+        end)
+    end
+end
+
+function Notification:Show()
+    if self.IsVisible then return end
+    
+    -- Add to container
+    self.Frame.Parent = self.Container
+    
+    -- Play sound
+    playSound(self.Type)
+    
+    -- Animate in
+    self.IsVisible = true
+    
+    -- Reset all transparencies
+    local tweens = {}
+    
+    -- Frame and shadow
+    table.insert(tweens, TweenService:Create(
+        self.Frame,
+        CONFIG.TWEEN_INFO_IN,
+        {BackgroundTransparency = 0.1}
+    ))
+    
+    table.insert(tweens, TweenService:Create(
+        self.Frame.UIStroke,
+        CONFIG.TWEEN_INFO_IN,
+        {Transparency = 0.7}
+    ))
+    
+    table.insert(tweens, TweenService:Create(
+        self.Frame.Shadow,
+        CONFIG.TWEEN_INFO_IN,
+        {ImageTransparency = 0.8}
+    ))
+    
+    -- Content
+    local contentContainer = self.Frame.ContentContainer
+    for _, child in pairs(contentContainer:GetChildren()) do
+        if child:IsA("GuiObject") then
+            if child:IsA("TextLabel") or child:IsA("TextButton") then
+                table.insert(tweens, TweenService:Create(
+                    child,
+                    CONFIG.TWEEN_INFO_IN,
+                    {TextTransparency = 0}
+                ))
+            elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                table.insert(tweens, TweenService:Create(
+                    child,
+                    CONFIG.TWEEN_INFO_IN,
+                    {ImageTransparency = 0}
+                ))
+            end
+            
+            if child.BackgroundTransparency < 1 then
+                table.insert(tweens, TweenService:Create(
+                    child,
+                    CONFIG.TWEEN_INFO_IN,
+                    {BackgroundTransparency = child.BackgroundTransparency - 1}
+                ))
+            end
+        end
+    end
+    
+    -- Progress bar
+    table.insert(tweens, TweenService:Create(
+        self.Frame.ProgressBarContainer,
+        CONFIG.TWEEN_INFO_IN,
+        {BackgroundTransparency = 0.9}
+    ))
+    
+    table.insert(tweens, TweenService:Create(
+        self.Frame.ProgressBarContainer.ProgressBar,
+        CONFIG.TWEEN_INFO_IN,
+        {BackgroundTransparency = 0.3}
+    ))
+    
+    -- Play all tweens
+    for _, tween in ipairs(tweens) do
+        tween:Play()
+    end
+    
+    -- Start progress bar animation
+    if self.Duration > 0 then
+        self:AnimateProgressBar()
+        
+        -- Auto dismiss after duration
+        task.delay(self.Duration, function()
+            if not self.IsDismissed then
+                self:Dismiss()
+            end
+        end)
+    end
+end
+
+function Notification:AnimateProgressBar()
+    local progressBar = self.Frame.ProgressBarContainer.ProgressBar
+    
+    local tween = TweenService:Create(
+        progressBar,
+        TweenInfo.new(self.Duration, Enum.EasingStyle.Linear),
+        {Size = UDim2.new(0, 0, 1, 0)}
+    )
+    
+    tween:Play()
+end
+
+function Notification:Dismiss()
+    if self.IsDismissed then return end
+    
+    self.IsDismissed = true
+    
+    -- Animate out
+    local tweens = {}
+    
+    -- Frame and shadow
+    table.insert(tweens, TweenService:Create(
+        self.Frame,
+        CONFIG.TWEEN_INFO_OUT,
+        {BackgroundTransparency = 1}
+    ))
+    
+    table.insert(tweens, TweenService:Create(
+        self.Frame.UIStroke,
+        CONFIG.TWEEN_INFO_OUT,
+        {Transparency = 1}
+    ))
+    
+    table.insert(tweens, TweenService:Create(
+        self.Frame.Shadow,
+        CONFIG.TWEEN_INFO_OUT,
+        {ImageTransparency = 1}
+    ))
+    
+    -- Content
+    local contentContainer = self.Frame.ContentContainer
+    for _, child in pairs(contentContainer:GetChildren()) do
+        if child:IsA("GuiObject") then
+            if child:IsA("TextLabel") or child:IsA("TextButton") then
+                table.insert(tweens, TweenService:Create(
+                    child,
+                    CONFIG.TWEEN_INFO_OUT,
+                    {TextTransparency = 1}
+                ))
+            elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                table.insert(tweens, TweenService:Create(
+                    child,
+                    CONFIG.TWEEN_INFO_OUT,
+                    {ImageTransparency = 1}
+                ))
+            end
+            
+            if child.BackgroundTransparency < 1 then
+                table.insert(tweens, TweenService:Create(
+                    child,
+                    CONFIG.TWEEN_INFO_OUT,
+                    {BackgroundTransparency = 1}
+                ))
+            end
+        end
+    end
+    
+    -- Progress bar
+    table.insert(tweens, TweenService:Create(
+        self.Frame.ProgressBarContainer,
+        CONFIG.TWEEN_INFO_OUT,
+        {BackgroundTransparency = 1}
+    ))
+    
+    table.insert(tweens, TweenService:Create(
+        self.Frame.ProgressBarContainer.ProgressBar,
+        CONFIG.TWEEN_INFO_OUT,
+        {BackgroundTransparency = 1}
+    ))
+    
+    -- Play all tweens
+    for _, tween in ipairs(tweens) do
+        tween:Play()
+    end
+    
+    -- Remove after animation
+    task.delay(CONFIG.TWEEN_OUT_TIME, function()
+        if self.Frame and self.Frame.Parent then
+            self.Frame:Destroy()
+        end
+        
+        -- Notify the queue manager that this notification is gone
+        if NotificationSystem.OnNotificationClosed then
+            NotificationSystem.OnNotificationClosed(self)
+        end
+    end)
+end
+
+-- Notification Queue Manager
+local NotificationQueue = {}
+NotificationQueue.__index = NotificationQueue
+
+function NotificationQueue.new(player)
+    local self = setmetatable({}, NotificationQueue)
+    
+    self.Player = player
+    self.Queue = {}
+    self.ActiveNotifications = {}
+    self.MaxActive = 3  -- Maximum notifications visible at once
+    
+    -- Start queue processor
+    self:StartQueueProcessor()
+    
+    return self
+end
+
+function NotificationQueue:StartQueueProcessor()
+    -- Process the queue periodically
+    task.spawn(function()
+        while true do
+            self:ProcessQueue()
+            task.wait(CONFIG.QUEUE_CHECK_INTERVAL)
+        end
+    end)
+end
+
+function NotificationQueue:ProcessQueue()
+    -- Check if we can show more notifications
+    if #self.ActiveNotifications < self.MaxActive and #self.Queue > 0 then
+        -- Get next notification from queue
+        local notification = table.remove(self.Queue, 1)
+        
+        -- Add to active notifications
+        table.insert(self.ActiveNotifications, notification)
+        
+        -- Update positions of all active notifications
+        self:UpdatePositions()
+        
+        -- Show the notification
+        notification:Show()
+    end
+end
+
+function NotificationQueue:UpdatePositions()
+    local posConfig = CONFIG.POSITIONS[self.ActiveNotifications[1].Position]
+    local spacing = 8  -- Space between notifications
+    
+    for i, notification in ipairs(self.ActiveNotifications) do
+        local offset = (i - 1) * (notification.Frame.Size.Y.Offset + spacing)
+        local newPosition
+        
+        if posConfig.Growth == "Down" then
+            newPosition = UDim2.new(
+                posConfig.Position.X.Scale,
+                posConfig.Position.X.Offset,
+                posConfig.Position.Y.Scale,
+                posConfig.Position.Y.Offset + offset
+            )
+        else  -- "Up"
+            newPosition = UDim2.new(
+                posConfig.Position.X.Scale,
+                posConfig.Position.X.Offset,
+                posConfig.Position.Y.Scale,
+                posConfig.Position.Y.Offset - offset
+            )
+        end
+        
+        -- Apply new position
+        if notification.IsVisible and not notification.IsDismissed then
+            notification.Frame.Position = newPosition
+        end
+    end
+end
+
+function NotificationQueue:Add(notification)
+    -- Add to queue
+    table.insert(self.Queue, notification)
+end
+
+function NotificationQueue:Remove(notification)
+    -- Remove from active notifications
+    for i, activeNotif in ipairs(self.ActiveNotifications) do
+        if activeNotif == notification then
+            table.remove(self.ActiveNotifications, i)
+            break
+        end
+    end
+    
+    -- Update positions
+    self:UpdatePositions()
+end
+
+-- Main Notification System
+local playerQueues = {}
+
+-- Initialize notification system for a player
+function NotificationSystem.Initialize(player)
+    if not playerQueues[player] then
+        playerQueues[player] = NotificationQueue.new(player)
+    end
+    
+    return playerQueues[player]
+end
+
+-- Handle notification closed event
+function NotificationSystem.OnNotificationClosed(notification)
+    local queue = playerQueues[notification.Player]
+    if queue then
+        queue:Remove(notification)
+    end
+end
+
+-- Main notify function (public API)
+function NotificationSystem.Notify(player, params)
+    params = params or {}
+    
+    -- Set default parameters
+    local notifType = params.Type or "Info"
+    local title = params.Title or "Notification"
+    local message = params.Message or ""
+    local duration = params.Duration or CONFIG.DEFAULT_DURATION
+    local position = params.Position or CONFIG.DEFAULT_POSITION
+    local actions = params.Actions or {}
+    
+    -- Validate parameters
+    if not CONFIG.COLORS[notifType] then
+        notifType = "Info"
+    end
+    
+    if not CONFIG.POSITIONS[position] then
+        position = "TopRight"
+    end
+    
+    duration = math.clamp(duration, CONFIG.MIN_DURATION, CONFIG.MAX_DURATION)
+    
+    -- Create notification
+    local notification = Notification.new(player, notifType, title, message, duration, position, actions)
+    
+    -- Get queue for player (create if needed)
+    local queue = NotificationSystem.Initialize(player)
+    
+    -- Add notification to queue
+    queue:Add(notification)
+    
+    return notification
+end
+
+-- Convenience methods for different notification types
+function NotificationSystem.Success(player, title, message, params)
+    params = params or {}
+    params.Type = "Success"
+    params.Title = title
+    params.Message = message
+    return NotificationSystem.Notify(player, params)
+end
+
+function NotificationSystem.Info(player, title, message, params)
+    params = params or {}
+    params.Type = "Info"
+    params.Title = title
+    params.Message = message
+    return NotificationSystem.Notify(player, params)
+end
+
+function NotificationSystem.Warning(player, title, message, params)
+    params = params or {}
+    params.Type = "Warning"
+    params.Title = title
+    params.Message = message
+    return NotificationSystem.Notify(player, params)
+end
+
+function NotificationSystem.Error(player, title, message, params)
+    params = params or {}
+    params.Type = "Error"
+    params.Title = title
+    params.Message = message
+    return NotificationSystem.Notify(player, params)
+end
+
+-- Example usage:
+--[[
+    -- Basic usage
+    local player = game.Players.LocalPlayer
+    NotificationSystem.Success(player, "Success", "Your operation was completed successfully!")
+    
+    -- With custom duration and position
+    NotificationSystem.Info(player, "Information", "This is important information.", {
+        Duration = 8,
+        Position = "BottomRight"
+    })
+    
+    -- With action buttons
+    NotificationSystem.Warning(player, "Warning", "You're about to delete this item.", {
+        Actions = {
+            {
+                Text = "Delete",
+                Callback = function()
+                    print("Delete confirmed")
+                end,
+                DismissOnClick = true
+            },
+            {
+                Text = "Cancel",
+                Callback = function()
+                    print("Delete cancelled")
+                end,
+                DismissOnClick = true
+            }
+        },
+        Duration = 0  -- 0 means it won't auto-dismiss
+    })
+]]
+
+return NotificationSystem
