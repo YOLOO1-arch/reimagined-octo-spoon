@@ -1,0 +1,2075 @@
+-- AdminPanel.lua
+-- A beautiful, standalone admin panel UI for Roblox
+-- This is a visual demo with no actual admin functionality
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+-- ==================== THEME ====================
+local Theme = {
+    Colors = {
+        Primary = Color3.fromRGB(0, 122, 255),    -- Apple Blue
+        Secondary = Color3.fromRGB(44, 44, 46),   -- Dark Gray
+        Background = Color3.fromRGB(28, 28, 30),  -- Darker Gray
+        BackgroundLight = Color3.fromRGB(242, 242, 247), -- Light Gray
+        Text = Color3.fromRGB(255, 255, 255),     -- White
+        TextDark = Color3.fromRGB(0, 0, 0),       -- Black
+        TextDimmed = Color3.fromRGB(174, 174, 178), -- Dimmed Text
+        Success = Color3.fromRGB(52, 199, 89),    -- Apple Green
+        Warning = Color3.fromRGB(255, 204, 0),    -- Apple Yellow
+        Error = Color3.fromRGB(255, 59, 48),      -- Apple Red
+        InputBackground = Color3.fromRGB(58, 58, 60), -- Input Field
+        Black = Color3.fromRGB(0, 0, 0),          -- Pure Black
+        White = Color3.fromRGB(255, 255, 255)     -- Pure White
+    },
+    
+    FontSizes = {
+        Title = 24,
+        Subtitle = 18,
+        Button = 16,
+        Regular = 14,
+        Small = 12,
+        Input = 16
+    },
+    
+    Fonts = {
+        Bold = Enum.Font.GothamBold,
+        Medium = Enum.Font.GothamMedium,
+        Regular = Enum.Font.Gotham,
+        Light = Enum.Font.GothamSemibold
+    },
+    
+    CornerRadius = UDim.new(0, 8),
+    Padding = UDim.new(0, 8),
+    
+    -- Animation settings
+    Animation = {
+        Duration = {
+            Short = 0.15,
+            Medium = 0.3,
+            Long = 0.5
+        },
+        Style = {
+            Default = Enum.EasingStyle.Quad,
+            Bounce = Enum.EasingStyle.Bounce,
+            Elastic = Enum.EasingStyle.Elastic
+        },
+        Direction = {
+            In = Enum.EasingDirection.In,
+            Out = Enum.EasingDirection.Out,
+            InOut = Enum.EasingDirection.InOut
+        }
+    }
+}
+
+-- ==================== UTILITIES ====================
+local Utilities = {}
+
+-- UI Factory for creating consistent UI elements
+Utilities.UIFactory = {
+    CreateFrame = function(self, props)
+        local frame = Instance.new("Frame")
+        
+        for prop, value in pairs(props) do
+            if prop ~= "Parent" then
+                frame[prop] = value
+            end
+        end
+        
+        if props.Parent then
+            frame.Parent = props.Parent
+        end
+        
+        return frame
+    end,
+    
+    CreateTextLabel = function(self, props)
+        local label = Instance.new("TextLabel")
+        
+        for prop, value in pairs(props) do
+            if prop ~= "Parent" then
+                label[prop] = value
+            end
+        end
+        
+        if props.Parent then
+            label.Parent = props.Parent
+        end
+        
+        return label
+    end,
+    
+    CreateTextButton = function(self, props)
+        local button = Instance.new("TextButton")
+        
+        for prop, value in pairs(props) do
+            if prop ~= "Parent" then
+                button[prop] = value
+            end
+        end
+        
+        if props.Parent then
+            button.Parent = props.Parent
+        end
+        
+        return button
+    end,
+    
+    CreateTextBox = function(self, props)
+        local textBox = Instance.new("TextBox")
+        
+        for prop, value in pairs(props) do
+            if prop ~= "Parent" then
+                textBox[prop] = value
+            end
+        end
+        
+        if props.Parent then
+            textBox.Parent = props.Parent
+        end
+        
+        return textBox
+    end,
+    
+    CreateImageLabel = function(self, props)
+        local imageLabel = Instance.new("ImageLabel")
+        
+        for prop, value in pairs(props) do
+            if prop ~= "Parent" then
+                imageLabel[prop] = value
+            end
+        end
+        
+        if props.Parent then
+            imageLabel.Parent = props.Parent
+        end
+        
+        return imageLabel
+    end,
+    
+    CreateImageButton = function(self, props)
+        local imageButton = Instance.new("ImageButton")
+        
+        for prop, value in pairs(props) do
+            if prop ~= "Parent" then
+                imageButton[prop] = value
+            end
+        end
+        
+        if props.Parent then
+            imageButton.Parent = props.Parent
+        end
+        
+        return imageButton
+    end,
+    
+    CreateScrollingFrame = function(self, props)
+        local scrollingFrame = Instance.new("ScrollingFrame")
+        scrollingFrame.ScrollBarThickness = 4
+        scrollingFrame.ScrollBarImageColor3 = Theme.Colors.Primary
+        scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will be updated dynamically
+        
+        for prop, value in pairs(props) do
+            if prop ~= "Parent" then
+                scrollingFrame[prop] = value
+            end
+        end
+        
+        if props.Parent then
+            scrollingFrame.Parent = props.Parent
+        end
+        
+        return scrollingFrame
+    end,
+    
+    ApplyCornerRadius = function(self, instance, radius, topLeft, topRight, bottomRight, bottomLeft)
+        local uiCorner = Instance.new("UICorner")
+        uiCorner.CornerRadius = radius or Theme.CornerRadius
+        
+        if topLeft ~= nil then
+            uiCorner.TopLeft = topLeft
+            uiCorner.TopRight = topRight
+            uiCorner.BottomRight = bottomRight
+            uiCorner.BottomLeft = bottomLeft
+        end
+        
+        uiCorner.Parent = instance
+        return uiCorner
+    end,
+    
+    CreateBlurEffect = function(self, parent)
+        local blur = Instance.new("BlurEffect")
+        blur.Size = 10
+        blur.Parent = parent
+        return blur
+    end,
+    
+    CreateListLayout = function(self, parent, padding)
+        local listLayout = Instance.new("UIListLayout")
+        listLayout.Padding = padding or Theme.Padding
+        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        listLayout.Parent = parent
+        return listLayout
+    end,
+    
+    CreatePadding = function(self, parent, padding)
+        local uiPadding = Instance.new("UIPadding")
+        local pad = padding or Theme.Padding.Offset
+        uiPadding.PaddingTop = UDim.new(0, pad)
+        uiPadding.PaddingRight = UDim.new(0, pad)
+        uiPadding.PaddingBottom = UDim.new(0, pad)
+        uiPadding.PaddingLeft = UDim.new(0, pad)
+        uiPadding.Parent = parent
+        return uiPadding
+    end
+}
+
+-- Animation utilities
+Utilities.Animations = {
+    SlideIn = function(self, instance, direction)
+        direction = direction or "right"
+        
+        local startPos, endPos
+        if direction == "right" then
+            startPos = UDim2.new(1, 0, instance.Position.Y.Scale, instance.Position.Y.Offset)
+            endPos = UDim2.new(0.7, 0, instance.Position.Y.Scale, instance.Position.Y.Offset)
+        elseif direction == "left" then
+            startPos = UDim2.new(-1, 0, instance.Position.Y.Scale, instance.Position.Y.Offset)
+            endPos = UDim2.new(0, 0, instance.Position.Y.Scale, instance.Position.Y.Offset)
+        elseif direction == "up" then
+            startPos = UDim2.new(instance.Position.X.Scale, instance.Position.X.Offset, 1, 0)
+            endPos = UDim2.new(instance.Position.X.Scale, instance.Position.X.Offset, 0, 0)
+        elseif direction == "down" then
+            startPos = UDim2.new(instance.Position.X.Scale, instance.Position.X.Offset, -1, 0)
+            endPos = UDim2.new(instance.Position.X.Scale, instance.Position.X.Offset, 0, 0)
+        end
+        
+        instance.Position = startPos
+        
+        local tween = TweenService:Create(
+            instance,
+            TweenInfo.new(
+                Theme.Animation.Duration.Medium,
+                Theme.Animation.Style.Default,
+                Theme.Animation.Direction.Out
+            ),
+            {Position = endPos}
+        )
+        
+        tween:Play()
+        return tween
+    end,
+    
+    SlideOut = function(self, instance, direction)
+        direction = direction or "right"
+        
+        local endPos
+        if direction == "right" then
+            endPos = UDim2.new(1, 0, instance.Position.Y.Scale, instance.Position.Y.Offset)
+        elseif direction == "left" then
+            endPos = UDim2.new(-1, 0, instance.Position.Y.Scale, instance.Position.Y.Offset)
+        elseif direction == "up" then
+            endPos = UDim2.new(instance.Position.X.Scale, instance.Position.X.Offset, -1, 0)
+        elseif direction == "down" then
+            endPos = UDim2.new(instance.Position.X.Scale, instance.Position.X.Offset, 1, 0)
+        end
+        
+        local tween = TweenService:Create(
+            instance,
+            TweenInfo.new(
+                Theme.Animation.Duration.Medium,
+                Theme.Animation.Style.Default,
+                Theme.Animation.Direction.In
+            ),
+            {Position = endPos}
+        )
+        
+        tween:Play()
+        return tween
+    end,
+    
+    FadeIn = function(self, instance, duration)
+        duration = duration or Theme.Animation.Duration.Medium
+        
+        instance.BackgroundTransparency = 1
+        
+        local tween = TweenService:Create(
+            instance,
+            TweenInfo.new(
+                duration,
+                Theme.Animation.Style.Default,
+                Theme.Animation.Direction.Out
+            ),
+            {BackgroundTransparency = 0.5}
+        )
+        
+        tween:Play()
+        return tween
+    end,
+    
+    FadeOut = function(self, instance, duration)
+        duration = duration or Theme.Animation.Duration.Medium
+        
+        local tween = TweenService:Create(
+            instance,
+            TweenInfo.new(
+                duration,
+                Theme.Animation.Style.Default,
+                Theme.Animation.Direction.In
+            ),
+            {BackgroundTransparency = 1}
+        )
+        
+        tween:Play()
+        return tween
+    end,
+    
+    PopIn = function(self, instance, scale)
+        scale = scale or 1.05
+        
+        instance.Size = UDim2.new(
+            instance.Size.X.Scale * scale,
+            instance.Size.X.Offset * scale,
+            instance.Size.Y.Scale * scale,
+            instance.Size.Y.Offset * scale
+        )
+        
+        local tween = TweenService:Create(
+            instance,
+            TweenInfo.new(
+                Theme.Animation.Duration.Short,
+                Theme.Animation.Style.Default,
+                Theme.Animation.Direction.Out
+            ),
+            {
+                Size = UDim2.new(
+                    instance.Size.X.Scale / scale,
+                    instance.Size.X.Offset / scale,
+                    instance.Size.Y.Scale / scale,
+                    instance.Size.Y.Offset / scale
+                )
+            }
+        )
+        
+        tween:Play()
+        return tween
+    end
+}
+
+-- ==================== COMPONENTS ====================
+
+-- Command Bar Component
+local CommandBar = {}
+
+-- Sample command suggestions for the fake admin panel
+local SAMPLE_COMMANDS = {
+    { name = "kick", usage = "kick [player] [reason]", description = "Kick a player from the server" },
+    { name = "ban", usage = "ban [player] [duration] [reason]", description = "Ban a player from the server" },
+    { name = "unban", usage = "unban [username/userId]", description = "Unban a previously banned player" },
+    { name = "teleport", usage = "teleport [player] [destination]", description = "Teleport a player to a location" },
+    { name = "bring", usage = "bring [player]", description = "Teleport a player to you" },
+    { name = "goto", usage = "goto [player]", description = "Teleport yourself to a player" },
+    { name = "heal", usage = "heal [player]", description = "Restore a player's health" },
+    { name = "kill", usage = "kill [player]", description = "Kill a player" },
+    { name = "speed", usage = "speed [player] [amount]", description = "Set a player's walk speed" },
+    { name = "jump", usage = "jump [player] [amount]", description = "Set a player's jump power" },
+    { name = "fly", usage = "fly [player]", description = "Enable flying for a player" },
+    { name = "unfly", usage = "unfly [player]", description = "Disable flying for a player" },
+    { name = "message", usage = "message [text]", description = "Send a message to all players" },
+    { name = "pm", usage = "pm [player] [text]", description = "Send a private message to a player" },
+    { name = "give", usage = "give [player] [item] [amount]", description = "Give items to a player" },
+    { name = "freeze", usage = "freeze [player]", description = "Freeze a player in place" },
+    { name = "unfreeze", usage = "unfreeze [player]", description = "Unfreeze a player" },
+    { name = "mute", usage = "mute [player] [duration]", description = "Mute a player from chat" },
+    { name = "unmute", usage = "unmute [player]", description = "Unmute a player" },
+    { name = "shutdown", usage = "shutdown [reason]", description = "Shut down the server" }
+}
+
+function CommandBar:Create(parent)
+    local self = setmetatable({}, { __index = CommandBar })
+    
+    -- Create container
+    self.Container = Utilities.UIFactory:CreateFrame({
+        Name = "CommandBarContainer",
+        Position = UDim2.new(0, 0, 1, -50),
+        Size = UDim2.new(1, 0, 0, 50),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        BorderSizePixel = 0,
+        ZIndex = 15,
+        Parent = parent
+    })
+    
+    -- Create input box
+    self.InputBox = Utilities.UIFactory:CreateTextBox({
+        Name = "CommandInput",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 30),
+        Text = "",
+        PlaceholderText = "Type a command...",
+        TextColor3 = Theme.Colors.Text,
+        PlaceholderColor3 = Theme.Colors.TextDimmed,
+        TextSize = Theme.FontSizes.Input,
+        Font = Theme.Fonts.Regular,
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        ZIndex = 16,
+        Parent = self.Container
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(self.InputBox, Theme.CornerRadius)
+    
+    -- Create suggestions container
+    self.SuggestionsContainer = Utilities.UIFactory:CreateFrame({
+        Name = "SuggestionsContainer",
+        Position = UDim2.new(0, 10, 0, -200),
+        Size = UDim2.new(1, -20, 0, 0), -- Dynamic height based on suggestions
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        BorderSizePixel = 0,
+        Visible = false,
+        ZIndex = 20,
+        Parent = self.Container
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(self.SuggestionsContainer, Theme.CornerRadius)
+    
+    -- Connect input events
+    self.InputBox.Changed:Connect(function(property)
+        if property == "Text" then
+            self:UpdateSuggestions(self.InputBox.Text)
+        end
+    end)
+    
+    self.InputBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            self:ExecuteCommand(self.InputBox.Text)
+        end
+        task.wait(0.1)
+        self:HideSuggestions()
+    end)
+    
+    self.InputBox.Focused:Connect(function()
+        self:UpdateSuggestions(self.InputBox.Text)
+    end)
+    
+    return self
+end
+
+function CommandBar:UpdateSuggestions(text)
+    -- Clear existing suggestions
+    for _, child in pairs(self.SuggestionsContainer:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    
+    if text == "" then
+        self:HideSuggestions()
+        return
+    end
+    
+    -- Find matching commands
+    local matches = {}
+    text = text:lower()
+    
+    for _, cmd in ipairs(SAMPLE_COMMANDS) do
+        if cmd.name:lower():find(text, 1, true) then
+            table.insert(matches, cmd)
+        end
+    end
+    
+    if #matches == 0 then
+        self:HideSuggestions()
+        return
+    end
+    
+    -- Show suggestions
+    self:ShowSuggestions(matches)
+end
+
+function CommandBar:ShowSuggestions(suggestions)
+    local height = math.min(#suggestions * 40, 200)
+    self.SuggestionsContainer.Size = UDim2.new(1, -20, 0, height)
+    self.SuggestionsContainer.Position = UDim2.new(0, 10, 0, -height - 5)
+    self.SuggestionsContainer.Visible = true
+    
+    -- Create suggestion items
+    for i, suggestion in ipairs(suggestions) do
+        local item = Utilities.UIFactory:CreateFrame({
+            Name = "Suggestion_" .. suggestion.name,
+            Position = UDim2.new(0, 0, 0, (i-1) * 40),
+            Size = UDim2.new(1, 0, 0, 40),
+            BackgroundTransparency = 1,
+            ZIndex = 21,
+            Parent = self.SuggestionsContainer
+        })
+        
+        -- Command name
+        Utilities.UIFactory:CreateTextLabel({
+            Name = "CommandName",
+            Position = UDim2.new(0, 10, 0, 5),
+            Size = UDim2.new(0.3, 0, 0, 16),
+            Text = suggestion.name,
+            TextColor3 = Theme.Colors.Primary,
+            TextSize = Theme.FontSizes.Small,
+            Font = Theme.Fonts.Bold,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            BackgroundTransparency = 1,
+            ZIndex = 22,
+            Parent = item
+        })
+        
+        -- Command usage
+        Utilities.UIFactory:CreateTextLabel({
+            Name = "CommandUsage",
+            Position = UDim2.new(0, 10, 0, 21),
+            Size = UDim2.new(0.3, 0, 0, 14),
+            Text = suggestion.usage,
+            TextColor3 = Theme.Colors.TextDimmed,
+            TextSize = Theme.FontSizes.Small,
+            Font = Theme.Fonts.Regular,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            BackgroundTransparency = 1,
+            ZIndex = 22,
+            Parent = item
+        })
+        
+        -- Command description
+        Utilities.UIFactory:CreateTextLabel({
+            Name = "CommandDescription",
+            Position = UDim2.new(0.3, 10, 0, 0),
+            Size = UDim2.new(0.7, -20, 1, 0),
+            Text = suggestion.description,
+            TextColor3 = Theme.Colors.Text,
+            TextSize = Theme.FontSizes.Small,
+            Font = Theme.Fonts.Regular,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            BackgroundTransparency = 1,
+            TextWrapped = true,
+            ZIndex = 22,
+            Parent = item
+        })
+        
+        -- Hover effect
+        item.MouseEnter:Connect(function()
+            item.BackgroundTransparency = 0.9
+            item.BackgroundColor3 = Theme.Colors.Primary
+        end)
+        
+        item.MouseLeave:Connect(function()
+            item.BackgroundTransparency = 1
+        end)
+        
+        -- Click to select
+        item.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                self.InputBox.Text = suggestion.name .. " "
+                self.InputBox:CaptureFocus()
+                self:HideSuggestions()
+            end
+        end)
+    end
+    
+    -- Animate in
+    Utilities.Animations:PopIn(self.SuggestionsContainer)
+end
+
+function CommandBar:HideSuggestions()
+    self.SuggestionsContainer.Visible = false
+end
+
+function CommandBar:ExecuteCommand(commandText)
+    if commandText == "" then return end
+    
+    -- In a real admin panel, this would send the command to the server
+    -- For this fake panel, we'll just clear the input and show a notification
+    
+    -- Get the first word (command name)
+    local commandName = commandText:match("^(%S+)")
+    
+    -- Find the command in our samples
+    local commandFound = false
+    for _, cmd in ipairs(SAMPLE_COMMANDS) do
+        if cmd.name:lower() == commandName:lower() then
+            commandFound = true
+            break
+        end
+    end
+    
+    -- Clear input
+    self.InputBox.Text = ""
+    
+    -- Dispatch a fake execution event to show in the activity log
+    local event = Instance.new("BindableEvent")
+    event.Name = "CommandExecuted"
+    event.Event:Connect(function() end) -- Empty connection just for show
+    event:Fire({
+        command = commandText,
+        status = commandFound and "success" or "error",
+        timestamp = os.time()
+    })
+    event:Destroy()
+    
+    -- Show fake notification
+    if _G.AdminPanelNotifications then
+        _G.AdminPanelNotifications:Show({
+            title = commandFound and "Command Executed" or "Command Error",
+            message = commandFound and "Executed: " .. commandText or "Unknown command: " .. commandName,
+            type = commandFound and "success" or "error"
+        })
+    end
+end
+
+-- Player List Component
+local PlayerList = {}
+
+function PlayerList:Create(parent)
+    local self = setmetatable({}, { __index = PlayerList })
+    
+    -- Create container
+    self.Container = Utilities.UIFactory:CreateFrame({
+        Name = "PlayerListContainer",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = parent
+    })
+    
+    -- Create search bar
+    self.SearchBar = Utilities.UIFactory:CreateTextBox({
+        Name = "SearchBar",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 30),
+        Text = "",
+        PlaceholderText = "Search players...",
+        TextColor3 = Theme.Colors.Text,
+        PlaceholderColor3 = Theme.Colors.TextDimmed,
+        TextSize = Theme.FontSizes.Input,
+        Font = Theme.Fonts.Regular,
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        ZIndex = 12,
+        Parent = self.Container
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(self.SearchBar, Theme.CornerRadius)
+    
+    -- Create player cards container
+    self.PlayerCardsContainer = Utilities.UIFactory:CreateScrollingFrame({
+        Name = "PlayerCardsContainer",
+        Position = UDim2.new(0, 10, 0, 50),
+        Size = UDim2.new(1, -20, 1, -60),
+        BackgroundTransparency = 1,
+        ZIndex = 12,
+        Parent = self.Container
+    })
+    
+    -- Add grid layout
+    local gridLayout = Instance.new("UIGridLayout")
+    gridLayout.CellSize = UDim2.new(0.5, -10, 0, 100)
+    gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
+    gridLayout.SortOrder = Enum.SortOrder.Name
+    gridLayout.Parent = self.PlayerCardsContainer
+    
+    -- Generate fake player data
+    self:GenerateFakePlayers()
+    
+    -- Connect search bar
+    self.SearchBar.Changed:Connect(function(property)
+        if property == "Text" then
+            self:FilterPlayers(self.SearchBar.Text)
+        end
+    end)
+    
+    return self
+end
+
+function PlayerList:GenerateFakePlayers()
+    -- Sample player data
+    local fakePlayers = {
+        { name = "Player1", displayName = "Cool Gamer", rank = "Admin", avatar = "rbxassetid://0" },
+        { name = "Player2", displayName = "Pro Builder", rank = "Moderator", avatar = "rbxassetid://0" },
+        { name = "Player3", displayName = "Speedrunner", rank = "VIP", avatar = "rbxassetid://0" },
+        { name = "Player4", displayName = "Pixel Artist", rank = "Member", avatar = "rbxassetid://0" },
+        { name = "Player5", displayName = "Game Designer", rank = "Member", avatar = "rbxassetid://0" },
+        { name = "Player6", displayName = "Scripter", rank = "Member", avatar = "rbxassetid://0" },
+        { name = "Player7", displayName = "Animator", rank = "Member", avatar = "rbxassetid://0" },
+        { name = "Player8", displayName = "Tester", rank = "Member", avatar = "rbxassetid://0" }
+    }
+
+    -- Create player cards
+    for _, playerData in ipairs(fakePlayers) do
+        self:CreatePlayerCard(playerData)
+    end
+    
+    -- Update canvas size
+    self:UpdateCanvasSize()
+end
+
+function PlayerList:CreatePlayerCard(playerData)
+    local card = Utilities.UIFactory:CreateFrame({
+        Name = "PlayerCard_" .. playerData.name,
+        Size = UDim2.new(1, 0, 0, 100),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        ZIndex = 13,
+        Parent = self.PlayerCardsContainer
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(card, Theme.CornerRadius)
+    
+    -- Avatar
+    local avatar = Utilities.UIFactory:CreateImageLabel({
+        Name = "Avatar",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(0, 80, 0, 80),
+        Image = playerData.avatar,
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        ZIndex = 14,
+        Parent = card
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(avatar, UDim.new(1, 0)) -- Circle
+    
+    -- Player name
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "PlayerName",
+        Position = UDim2.new(0, 100, 0, 15),
+        Size = UDim2.new(1, -170, 0, 20),
+        Text = playerData.displayName,
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Regular,
+        Font = Theme.Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = card
+    })
+    
+    -- Username
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "Username",
+        Position = UDim2.new(0, 100, 0, 35),
+        Size = UDim2.new(1, -170, 0, 16),
+        Text = "@" .. playerData.name,
+        TextColor3 = Theme.Colors.TextDimmed,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = card
+    })
+    
+    -- Rank badge
+    local rankColors = {
+        Admin = Theme.Colors.Error,
+        Moderator = Theme.Colors.Primary,
+        VIP = Theme.Colors.Warning,
+        Member = Theme.Colors.Success
+    }
+    
+    local rankBadge = Utilities.UIFactory:CreateFrame({
+        Name = "RankBadge",
+        Position = UDim2.new(0, 100, 0, 55),
+        Size = UDim2.new(0, 80, 0, 20),
+        BackgroundColor3 = rankColors[playerData.rank] or Theme.Colors.TextDimmed,
+        ZIndex = 14,
+        Parent = card
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(rankBadge, UDim.new(0, 4))
+    
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "RankText",
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = playerData.rank,
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Bold,
+        BackgroundTransparency = 1,
+        ZIndex = 15,
+        Parent = rankBadge
+    })
+    
+    -- Quick action buttons
+    local actionButtonSize = 30
+    local actionButtons = {
+        { name = "Kick", icon = "❌", color = Theme.Colors.Error },
+        { name = "Ban", icon = "🚫", color = Theme.Colors.Error },
+        { name = "Teleport", icon = "🔄", color = Theme.Colors.Primary }
+    }
+    
+    for i, action in ipairs(actionButtons) do
+        local button = Utilities.UIFactory:CreateTextButton({
+            Name = action.name .. "Button",
+            Position = UDim2.new(1, -40 * i, 0, 10),
+            Size = UDim2.new(0, actionButtonSize, 0, actionButtonSize),
+            Text = action.icon,
+            TextColor3 = Theme.Colors.Text,
+            TextSize = 16,
+            Font = Theme.Fonts.Regular,
+            BackgroundColor3 = action.color,
+            ZIndex = 14,
+            Parent = card
+        })
+        
+        Utilities.UIFactory:ApplyCornerRadius(button, UDim.new(0, 6))
+        
+        -- Tooltip
+        local tooltip = Utilities.UIFactory:CreateFrame({
+            Name = "Tooltip",
+            Position = UDim2.new(0.5, 0, 0, -30),
+            Size = UDim2.new(0, 80, 0, 25),
+            BackgroundColor3 = Theme.Colors.Black,
+            BackgroundTransparency = 0.2,
+            Visible = false,
+            ZIndex = 20,
+            Parent = button
+        })
+        
+        Utilities.UIFactory:ApplyCornerRadius(tooltip, UDim.new(0, 4))
+        
+        Utilities.UIFactory:CreateTextLabel({
+            Name = "TooltipText",
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = action.name,
+            TextColor3 = Theme.Colors.Text,
+            TextSize = Theme.FontSizes.Small,
+            Font = Theme.Fonts.Regular,
+            BackgroundTransparency = 1,
+            ZIndex = 21,
+            Parent = tooltip
+        })
+        
+        -- Hover effects
+        button.MouseEnter:Connect(function()
+            tooltip.Visible = true
+            
+            local tween = TweenService:Create(
+                button,
+                TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, actionButtonSize + 4, 0, actionButtonSize + 4)}
+            )
+            tween:Play()
+        end)
+        
+        button.MouseLeave:Connect(function()
+            tooltip.Visible = false
+            
+            local tween = TweenService:Create(
+                button,
+                TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, actionButtonSize, 0, actionButtonSize)}
+            )
+            tween:Play()
+        end)
+        
+        -- Click effect
+        button.MouseButton1Click:Connect(function()
+            -- Show notification for the action
+            if _G.AdminPanelNotifications then
+                _G.AdminPanelNotifications:Show({
+                    title = action.name .. " Action",
+                    message = action.name .. " " .. playerData.name .. " (This is a demo, no actual action taken)",
+                    type = "info"
+                })
+            end
+        end)
+    end
+    
+    return card
+end
+
+function PlayerList:FilterPlayers(searchText)
+    searchText = searchText:lower()
+    
+    for _, card in pairs(self.PlayerCardsContainer:GetChildren()) do
+        if card:IsA("Frame") and card.Name:find("PlayerCard_") then
+            local playerName = card.Name:gsub("PlayerCard_", ""):lower()
+            local displayName = card:FindFirstChild("PlayerName")
+            
+            if displayName then
+                displayName = displayName.Text:lower()
+            end
+            
+            if playerName:find(searchText, 1, true) or (displayName and displayName:find(searchText, 1, true)) then
+                card.Visible = true
+            else
+                card.Visible = false
+            end
+        end
+    end
+    
+    self:UpdateCanvasSize()
+end
+
+function PlayerList:UpdateCanvasSize()
+    local gridLayout = self.PlayerCardsContainer:FindFirstChildOfClass("UIGridLayout")
+    if gridLayout then
+        local contentSize = gridLayout.AbsoluteContentSize
+        self.PlayerCardsContainer.CanvasSize = UDim2.new(0, 0, 0, contentSize.Y + 20)
+    end
+end
+
+-- Command List Component
+local CommandList = {}
+
+function CommandList:Create(parent)
+    local self = setmetatable({}, { __index = CommandList })
+    
+    -- Create container
+    self.Container = Utilities.UIFactory:CreateFrame({
+        Name = "CommandListContainer",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = parent
+    })
+    
+    -- Create search bar
+    self.SearchBar = Utilities.UIFactory:CreateTextBox({
+        Name = "SearchBar",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 30),
+        Text = "",
+        PlaceholderText = "Search commands...",
+        TextColor3 = Theme.Colors.Text,
+        PlaceholderColor3 = Theme.Colors.TextDimmed,
+        TextSize = Theme.FontSizes.Input,
+        Font = Theme.Fonts.Regular,
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        ZIndex = 12,
+        Parent = self.Container
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(self.SearchBar, Theme.CornerRadius)
+    
+    -- Create commands list
+    self.CommandsListFrame = Utilities.UIFactory:CreateScrollingFrame({
+        Name = "CommandsListFrame",
+        Position = UDim2.new(0, 10, 0, 50),
+        Size = UDim2.new(1, -20, 1, -60),
+        BackgroundTransparency = 1,
+        ZIndex = 12,
+        Parent = self.Container
+    })
+    
+    -- Add list layout
+    Utilities.UIFactory:CreateListLayout(self.CommandsListFrame, UDim.new(0, 10))
+    
+    -- Populate commands
+    self:PopulateCommands()
+    
+    -- Connect search bar
+    self.SearchBar.Changed:Connect(function(property)
+        if property == "Text" then
+            self:FilterCommands(self.SearchBar.Text)
+        end
+    end)
+    
+    return self
+end
+
+function CommandList:PopulateCommands()
+    for _, command in ipairs(SAMPLE_COMMANDS) do
+        self:CreateCommandItem(command)
+    end
+    
+    self:UpdateCanvasSize()
+end
+
+function CommandList:CreateCommandItem(command)
+    local item = Utilities.UIFactory:CreateFrame({
+        Name = "Command_" .. command.name,
+        Size = UDim2.new(1, 0, 0, 80),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        ZIndex = 13,
+        Parent = self.CommandsListFrame
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(item, Theme.CornerRadius)
+    
+    -- Command name
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "CommandName",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 20),
+        Text = command.name,
+        TextColor3 = Theme.Colors.Primary,
+        TextSize = Theme.FontSizes.Regular,
+        Font = Theme.Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = item
+    })
+    
+    -- Command usage
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "CommandUsage",
+        Position = UDim2.new(0, 10, 0, 30),
+        Size = UDim2.new(1, -20, 0, 20),
+        Text = "Usage: " .. command.usage,
+        TextColor3 = Theme.Colors.TextDimmed,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = item
+    })
+
+-- Command description
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "CommandDescription",
+        Position = UDim2.new(0, 10, 0, 50),
+        Size = UDim2.new(1, -20, 0, 20),
+        Text = command.description,
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = item
+    })
+    
+    -- Use button
+    local useButton = Utilities.UIFactory:CreateTextButton({
+        Name = "UseButton",
+        Position = UDim2.new(1, -80, 0, 10),
+        Size = UDim2.new(0, 70, 0, 30),
+        Text = "Use",
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Bold,
+        BackgroundColor3 = Theme.Colors.Primary,
+        ZIndex = 14,
+        Parent = item
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(useButton, UDim.new(0, 6))
+    
+    -- Click effect
+    useButton.MouseButton1Click:Connect(function()
+        -- Find the command bar and set its text
+        local mainUI = _G.AdminPanelMainUI
+        if mainUI and mainUI.CommandBarInstance then
+            mainUI.CommandBarInstance.InputBox.Text = command.name .. " "
+            mainUI.CommandBarInstance.InputBox:CaptureFocus()
+        end
+    end)
+    
+    return item
+end
+
+function CommandList:FilterCommands(searchText)
+    searchText = searchText:lower()
+    
+    for _, item in pairs(self.CommandsListFrame:GetChildren()) do
+        if item:IsA("Frame") and item.Name:find("Command_") then
+            local commandName = item.Name:gsub("Command_", ""):lower()
+            
+            if commandName:find(searchText, 1, true) then
+                item.Visible = true
+            else
+                item.Visible = false
+            end
+        end
+    end
+    
+    self:UpdateCanvasSize()
+end
+
+function CommandList:UpdateCanvasSize()
+    local listLayout = self.CommandsListFrame:FindFirstChildOfClass("UIListLayout")
+    if listLayout then
+        local contentSize = listLayout.AbsoluteContentSize
+        self.CommandsListFrame.CanvasSize = UDim2.new(0, 0, 0, contentSize.Y + 20)
+    end
+end
+
+-- Activity Log Component
+local ActivityLog = {}
+
+function ActivityLog:Create(parent)
+    local self = setmetatable({}, { __index = ActivityLog })
+    
+    -- Create container
+    self.Container = Utilities.UIFactory:CreateFrame({
+        Name = "ActivityLogContainer",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = parent
+    })
+    
+    -- Create header
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "Header",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 30),
+        Text = "Activity Log",
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Subtitle,
+        Font = Theme.Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 12,
+        Parent = self.Container
+    })
+    
+    -- Create log container
+    self.LogContainer = Utilities.UIFactory:CreateScrollingFrame({
+        Name = "LogContainer",
+        Position = UDim2.new(0, 10, 0, 50),
+        Size = UDim2.new(1, -20, 1, -60),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        ZIndex = 12,
+        Parent = self.Container
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(self.LogContainer, Theme.CornerRadius)
+    
+    -- Add list layout
+    Utilities.UIFactory:CreateListLayout(self.LogContainer, UDim.new(0, 5))
+    Utilities.UIFactory:CreatePadding(self.LogContainer, 10)
+    
+    -- Add some sample log entries
+    self:AddLogEntry({
+        type = "info",
+        message = "Admin system initialized",
+        timestamp = os.time() - 300
+    })
+    
+    self:AddLogEntry({
+        type = "success",
+        message = "Player1 joined the game",
+        timestamp = os.time() - 240
+    })
+    
+    self:AddLogEntry({
+        type = "warning",
+        message = "Player2 attempted to use restricted command",
+        timestamp = os.time() - 180
+    })
+
+self:AddLogEntry({
+        type = "error",
+        message = "Failed to teleport Player3: Target not found",
+        timestamp = os.time() - 120
+    })
+    
+    self:AddLogEntry({
+        type = "success",
+        message = "Executed command: kick Player4 Inappropriate behavior",
+        timestamp = os.time() - 60
+    })
+    
+    -- Listen for command executions
+    local function onCommandExecuted(data)
+        self:AddLogEntry({
+            type = data.status,
+            message = "Executed command: " .. data.command,
+            timestamp = data.timestamp
+        })
+    end
+    
+    -- Create a global event connection
+    _G.AdminPanelLogEvent = function(data)
+        onCommandExecuted(data)
+    end
+    
+    return self
+end
+
+function ActivityLog:AddLogEntry(data)
+    local typeColors = {
+        info = Theme.Colors.Primary,
+        success = Theme.Colors.Success,
+        warning = Theme.Colors.Warning,
+        error = Theme.Colors.Error
+    }
+    
+    local entry = Utilities.UIFactory:CreateFrame({
+        Name = "LogEntry_" .. os.time(),
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        ZIndex = 13,
+        Parent = self.LogContainer
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(entry, UDim.new(0, 6))
+    
+    -- Type indicator
+    local indicator = Utilities.UIFactory:CreateFrame({
+        Name = "TypeIndicator",
+        Position = UDim2.new(0, 5, 0, 5),
+        Size = UDim2.new(0, 5, 1, -10),
+        BackgroundColor3 = typeColors[data.type] or Theme.Colors.TextDimmed,
+        ZIndex = 14,
+        Parent = entry
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(indicator, UDim.new(0, 2))
+    
+    -- Timestamp
+    local timestamp = os.date("%H:%M:%S", data.timestamp)
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "Timestamp",
+        Position = UDim2.new(0, 15, 0, 0),
+        Size = UDim2.new(0, 70, 1, 0),
+        Text = timestamp,
+        TextColor3 = Theme.Colors.TextDimmed,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = entry
+    })
+    
+    -- Message
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "Message",
+        Position = UDim2.new(0, 90, 0, 0),
+        Size = UDim2.new(1, -100, 1, 0),
+        Text = data.message,
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = entry
+    })
+    
+    -- Update canvas size
+    self:UpdateCanvasSize()
+    
+    -- Auto-scroll to bottom
+    self.LogContainer.CanvasPosition = Vector2.new(0, self.LogContainer.CanvasSize.Y.Offset)
+end
+
+function ActivityLog:UpdateCanvasSize()
+    local listLayout = self.LogContainer:FindFirstChildOfClass("UIListLayout")
+    if listLayout then
+        local contentSize = listLayout.AbsoluteContentSize
+        self.LogContainer.CanvasSize = UDim2.new(0, 0, 0, contentSize.Y + 20)
+    end
+end
+
+-- Settings Component
+local Settings = {}
+
+function Settings:Create(parent)
+    local self = setmetatable({}, { __index = Settings })
+    
+    -- Create container
+    self.Container = Utilities.UIFactory:CreateFrame({
+        Name = "SettingsContainer",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = parent
+    })
+    
+    -- Create header
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "Header",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 30),
+        Text = "Settings",
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Subtitle,
+        Font = Theme.Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 12,
+        Parent = self.Container
+    })
+    
+    -- Create settings container
+    self.SettingsListFrame = Utilities.UIFactory:CreateScrollingFrame({
+        Name = "SettingsListFrame",
+        Position = UDim2.new(0, 10, 0, 50),
+        Size = UDim2.new(1, -20, 1, -60),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        ZIndex = 12,
+        Parent = self.Container
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(self.SettingsListFrame, Theme.CornerRadius)
+    
+    -- Add list layout
+    Utilities.UIFactory:CreateListLayout(self.SettingsListFrame, UDim.new(0, 10))
+    Utilities.UIFactory:CreatePadding(self.SettingsListFrame, 10)
+    
+    -- Add settings
+    self:AddToggleSetting("Dark Mode", true)
+    self:AddToggleSetting("Command Suggestions", true)
+    self:AddToggleSetting("Notifications", true)
+    self:AddToggleSetting("Sound Effects", false)
+    self:AddToggleSetting("Auto-complete Commands", true)
+    
+    -- Add slider settings
+    self:AddSliderSetting("UI Scale", 100, 50, 150)
+    self:AddSliderSetting("Animation Speed", 100, 50, 200)
+
+-- Add dropdown settings
+    self:AddDropdownSetting("Theme Color", "Blue", {"Blue", "Green", "Purple", "Red", "Orange"})
+    
+    -- Update canvas size
+    self:UpdateCanvasSize()
+    
+    return self
+end
+
+function Settings:AddToggleSetting(name, defaultValue)
+    local setting = Utilities.UIFactory:CreateFrame({
+        Name = "Setting_" .. name:gsub(" ", ""),
+        Size = UDim2.new(1, 0, 0, 50),
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        ZIndex = 13,
+        Parent = self.SettingsListFrame
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(setting, UDim.new(0, 6))
+    
+    -- Setting name
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "SettingName",
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -80, 1, 0),
+        Text = name,
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Regular,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = setting
+    })
+    
+    -- Toggle switch
+    local toggleBackground = Utilities.UIFactory:CreateFrame({
+        Name = "ToggleBackground",
+        Position = UDim2.new(1, -60, 0.5, -10),
+        Size = UDim2.new(0, 50, 0, 20),
+        BackgroundColor3 = defaultValue and Theme.Colors.Success or Theme.Colors.TextDimmed,
+        ZIndex = 14,
+        Parent = setting
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(toggleBackground, UDim.new(0, 10))
+    
+    local toggleHandle = Utilities.UIFactory:CreateFrame({
+        Name = "ToggleHandle",
+        Position = UDim2.new(defaultValue and 1 or 0, defaultValue and -20 or 0, 0, 0),
+        Size = UDim2.new(0, 20, 0, 20),
+        BackgroundColor3 = Theme.Colors.White,
+        ZIndex = 15,
+        Parent = toggleBackground
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(toggleHandle, UDim.new(0, 10))
+    
+    -- Toggle functionality
+    local isOn = defaultValue
+    
+    toggleBackground.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isOn = not isOn
+            
+            -- Animate toggle
+            local targetPosition = isOn and UDim2.new(1, -20, 0, 0) or UDim2.new(0, 0, 0, 0)
+            local targetColor = isOn and Theme.Colors.Success or Theme.Colors.TextDimmed
+            
+            local positionTween = TweenService:Create(
+                toggleHandle,
+                TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Position = targetPosition}
+            )
+            
+            local colorTween = TweenService:Create(
+                toggleBackground,
+                TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {BackgroundColor3 = targetColor}
+            )
+            
+            positionTween:Play()
+            colorTween:Play()
+            
+            -- Show notification
+            if _G.AdminPanelNotifications then
+                _G.AdminPanelNotifications:Show({
+                    title = "Setting Changed",
+                    message = name .. " is now " .. (isOn and "enabled" or "disabled"),
+                    type = "info"
+                })
+            end
+        end
+    end)
+    
+    return setting
+end
+
+function Settings:AddSliderSetting(name, defaultValue, minValue, maxValue)
+    local setting = Utilities.UIFactory:CreateFrame({
+        Name = "Setting_" .. name:gsub(" ", ""),
+        Size = UDim2.new(1, 0, 0, 70),
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        ZIndex = 13,
+        Parent = self.SettingsListFrame
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(setting, UDim.new(0, 6))
+    
+    -- Setting name
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "SettingName",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 20),
+        Text = name,
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Regular,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = setting
+    })
+    
+    -- Value display
+    local valueDisplay = Utilities.UIFactory:CreateTextLabel({
+        Name = "ValueDisplay",
+        Position = UDim2.new(1, -60, 0, 10),
+        Size = UDim2.new(0, 50, 0, 20),
+        Text = tostring(defaultValue) .. "%",
+        TextColor3 = Theme.Colors.Primary,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = setting
+    })
+    
+    -- Slider background
+    local sliderBackground = Utilities.UIFactory:CreateFrame({
+        Name = "SliderBackground",
+        Position = UDim2.new(0, 10, 0, 40),
+        Size = UDim2.new(1, -20, 0, 10),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        ZIndex = 14,
+        Parent = setting
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(sliderBackground, UDim.new(0, 5))
+    
+    -- Slider fill
+    local fillWidth = (defaultValue - minValue) / (maxValue - minValue)
+    local sliderFill = Utilities.UIFactory:CreateFrame({
+        Name = "SliderFill",
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(fillWidth, 0, 1, 0),
+        BackgroundColor3 = Theme.Colors.Primary,
+        ZIndex = 15,
+        Parent = sliderBackground
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(sliderFill, UDim.new(0, 5))
+    
+    -- Slider handle
+    local sliderHandle = Utilities.UIFactory:CreateFrame({
+        Name = "SliderHandle",
+        Position = UDim2.new(fillWidth, -10, 0.5, -10),
+        Size = UDim2.new(0, 20, 0, 20),
+        BackgroundColor3 = Theme.Colors.Primary,
+        ZIndex = 16,
+        Parent = sliderBackground
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(sliderHandle, UDim.new(0, 10))
+    
+    -- Slider functionality
+    local isDragging = false
+    local currentValue = defaultValue
+    
+    sliderHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+        end
+    end)
+    
+    sliderBackground.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+            
+            -- Update on click
+            local relativeX = math.clamp((input.Position.X - sliderBackground.AbsolutePosition.X) / sliderBackground.AbsoluteSize.X, 0, 1)
+            currentValue = math.floor(minValue + relativeX * (maxValue - minValue))
+            
+            -- Update UI
+            sliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
+            sliderHandle.Position = UDim2.new(relativeX, -10, 0.5, -10)
+            valueDisplay.Text = tostring(currentValue) .. "%"
+        end
+    end)
+UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if isDragging then
+                isDragging = false
+                
+                -- Show notification
+                if _G.AdminPanelNotifications then
+                    _G.AdminPanelNotifications:Show({
+                        title = "Setting Changed",
+                        message = name .. " set to " .. currentValue .. "%",
+                        type = "info"
+                    })
+                end
+            end
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            -- Calculate relative position
+            local relativeX = math.clamp((input.Position.X - sliderBackground.AbsolutePosition.X) / sliderBackground.AbsoluteSize.X, 0, 1)
+            currentValue = math.floor(minValue + relativeX * (maxValue - minValue))
+            
+            -- Update UI
+            sliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
+            sliderHandle.Position = UDim2.new(relativeX, -10, 0.5, -10)
+            valueDisplay.Text = tostring(currentValue) .. "%"
+        end
+    end)
+    
+    return setting
+end
+
+function Settings:AddDropdownSetting(name, defaultValue, options)
+    local setting = Utilities.UIFactory:CreateFrame({
+        Name = "Setting_" .. name:gsub(" ", ""),
+        Size = UDim2.new(1, 0, 0, 50),
+        BackgroundColor3 = Theme.Colors.InputBackground,
+        ZIndex = 13,
+        Parent = self.SettingsListFrame
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(setting, UDim.new(0, 6))
+    
+    -- Setting name
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "SettingName",
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(0.5, -20, 1, 0),
+        Text = name,
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Regular,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+        Parent = setting
+    })
+    
+    -- Dropdown button
+    local dropdownButton = Utilities.UIFactory:CreateTextButton({
+        Name = "DropdownButton",
+        Position = UDim2.new(0.5, 10, 0.5, -15),
+        Size = UDim2.new(0.5, -20, 0, 30),
+        Text = defaultValue .. " ▼",
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Regular,
+        BackgroundColor3 = Theme.Colors.Secondary,
+        ZIndex = 14,
+        Parent = setting
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(dropdownButton, UDim.new(0, 6))
+    
+    -- Dropdown menu
+    local dropdownMenu = Utilities.UIFactory:CreateFrame({
+        Name = "DropdownMenu",
+        Position = UDim2.new(0.5, 10, 1, 5),
+        Size = UDim2.new(0.5, -20, 0, #options * 30),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        Visible = false,
+        ZIndex = 20,
+        Parent = setting
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(dropdownMenu, UDim.new(0, 6))
+    
+    -- Add options
+    for i, option in ipairs(options) do
+        local optionButton = Utilities.UIFactory:CreateTextButton({
+            Name = "Option_" .. option,
+            Position = UDim2.new(0, 0, 0, (i-1) * 30),
+            Size = UDim2.new(1, 0, 0, 30),
+            Text = option,
+            TextColor3 = option == defaultValue and Theme.Colors.Primary or Theme.Colors.Text,
+            TextSize = Theme.FontSizes.Small,
+            Font = option == defaultValue and Theme.Fonts.Bold or Theme.Fonts.Regular,
+            BackgroundTransparency = 1,
+            ZIndex = 21,
+            Parent = dropdownMenu
+        })
+        
+        -- Hover effect
+        optionButton.MouseEnter:Connect(function()
+            optionButton.BackgroundTransparency = 0.9
+            optionButton.BackgroundColor3 = Theme.Colors.Primary
+        end)
+        
+        optionButton.MouseLeave:Connect(function()
+            optionButton.BackgroundTransparency = 1
+        end)
+        
+        -- Click to select
+        optionButton.MouseButton1Click:Connect(function()
+            dropdownButton.Text = option .. " ▼"
+            dropdownMenu.Visible = false
+            
+            -- Show notification
+            if _G.AdminPanelNotifications then
+                _G.AdminPanelNotifications:Show({
+                    title = "Setting Changed",
+                    message = name .. " set to " .. option,
+                    type = "info"
+                })
+            end
+        end)
+    end
+    
+    -- Toggle dropdown
+    dropdownButton.MouseButton1Click:Connect(function()
+        dropdownMenu.Visible = not dropdownMenu.Visible
+        dropdownButton.Text = defaultValue .. (dropdownMenu.Visible and " ▲" or " ▼")
+    end)
+    
+    return setting
+end
+
+function Settings:UpdateCanvasSize()
+    local listLayout = self.SettingsListFrame:FindFirstChildOfClass("UIListLayout")
+    if listLayout then
+        local contentSize = listLayout.AbsoluteContentSize
+        self.SettingsListFrame.CanvasSize = UDim2.new(0, 0, 0, contentSize.Y + 20)
+    end
+end
+
+-- Notifications Component
+local Notifications = {}
+
+function Notifications:Create(parent)
+    local self = setmetatable({}, { __index = Notifications })
+    
+    -- Create container
+    self.Container = Utilities.UIFactory:CreateFrame({
+        Name = "NotificationsContainer",
+        Position = UDim2.new(1, -320, 0, 20),
+        Size = UDim2.new(0, 300, 1, -40),
+        BackgroundTransparency = 1,
+        ZIndex = 100,
+        Parent = parent
+    })
+    
+    -- Store active notifications
+    self.ActiveNotifications = {}
+    
+    -- Make globally accessible
+    _G.AdminPanelNotifications = self
+    
+    return self
+end
+
+function Notifications:Show(data)
+    -- Data should have: title, message, type (success, error, warning, info)
+    local typeColors = {
+        success = Theme.Colors.Success,
+        error = Theme.Colors.Error,
+        warning = Theme.Colors.Warning,
+        info = Theme.Colors.Primary
+    }
+    
+    local notification = Utilities.UIFactory:CreateFrame({
+        Name = "Notification_" .. os.time(),
+        Position = UDim2.new(1, 0, 0, #self.ActiveNotifications * 90),
+        Size = UDim2.new(1, 0, 0, 80),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        ZIndex = 101,
+        Parent = self.Container
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(notification, Theme.CornerRadius)
+    
+    -- Type indicator
+    local indicator = Utilities.UIFactory:CreateFrame({
+        Name = "TypeIndicator",
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(0, 5, 1, 0),
+        BackgroundColor3 = typeColors[data.type] or Theme.Colors.Primary,
+        ZIndex = 102,
+        Parent = notification
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(indicator, UDim.new(0, 2))
+    
+    -- Title
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "Title",
+        Position = UDim2.new(0, 15, 0, 10),
+        Size = UDim2.new(1, -25, 0, 20),
+        Text = data.title,
+        TextColor3 = Theme.Colors.Text,
+        TextSize = Theme.FontSizes.Regular,
+        Font = Theme.Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 102,
+        Parent = notification
+    })
+
+-- Message
+    Utilities.UIFactory:CreateTextLabel({
+        Name = "Message",
+        Position = UDim2.new(0, 15, 0, 35),
+        Size = UDim2.new(1, -25, 0, 35),
+        Text = data.message,
+        TextColor3 = Theme.Colors.TextDimmed,
+        TextSize = Theme.FontSizes.Small,
+        Font = Theme.Fonts.Regular,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true,
+        BackgroundTransparency = 1,
+        ZIndex = 102,
+        Parent = notification
+    })
+    
+    -- Close button
+    local closeButton = Utilities.UIFactory:CreateTextButton({
+        Name = "CloseButton",
+        Position = UDim2.new(1, -25, 0, 10),
+        Size = UDim2.new(0, 20, 0, 20),
+        Text = "×",
+        TextColor3 = Theme.Colors.TextDimmed,
+        TextSize = 16,
+        Font = Theme.Fonts.Bold,
+        BackgroundTransparency = 1,
+        ZIndex = 102,
+        Parent = notification
+    })
+    
+    -- Add to active notifications
+    table.insert(self.ActiveNotifications, notification)
+    
+    -- Animate in
+    Utilities.Animations:SlideIn(notification, "left")
+    
+    -- Auto-dismiss after 5 seconds
+    local dismissTime = 5
+    local dismissConnection
+    
+    dismissConnection = RunService.Heartbeat:Connect(function()
+        dismissTime = dismissTime - RunService.Heartbeat:Wait()
+        if dismissTime <= 0 then
+            dismissConnection:Disconnect()
+            self:DismissNotification(notification)
+        end
+    end)
+    
+    -- Close button functionality
+    closeButton.MouseButton1Click:Connect(function()
+        dismissConnection:Disconnect()
+        self:DismissNotification(notification)
+    end)
+    
+    return notification
+end
+
+function Notifications:DismissNotification(notification)
+    -- Find index
+    local index = table.find(self.ActiveNotifications, notification)
+    if not index then return end
+    
+    -- Remove from active notifications
+    table.remove(self.ActiveNotifications, index)
+    
+    -- Animate out
+    local outTween = Utilities.Animations:SlideOut(notification, "left")
+    
+    -- Reposition remaining notifications
+    for i, notif in ipairs(self.ActiveNotifications) do
+        local targetPosition = UDim2.new(0, 0, 0, (i-1) * 90)
+        
+        local tween = TweenService:Create(
+            notif,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Position = targetPosition}
+        )
+        
+        tween:Play()
+    end
+    
+    -- Destroy after animation
+    outTween.Completed:Connect(function()
+        notification:Destroy()
+    end)
+end
+
+-- ==================== MAIN UI ====================
+local MainUI = {}
+
+function MainUI:Initialize()
+    -- Create ScreenGui
+    self.ScreenGui = Instance.new("ScreenGui")
+    self.ScreenGui.Name = "AdminPanelUI"
+    self.ScreenGui.ResetOnSpawn = false
+    self.ScreenGui.IgnoreGuiInset = true
+    self.ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    self.ScreenGui.Parent = PlayerGui
+    
+    -- Create main container
+    self.MainContainer = Utilities.UIFactory:CreateFrame({
+        Name = "MainContainer",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = self.ScreenGui
+    })
+    
+    -- Create backdrop for when panel is open
+    self.Backdrop = Utilities.UIFactory:CreateFrame({
+        Name = "Backdrop",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Theme.Colors.Black,
+        BackgroundTransparency = 1, -- Start transparent
+        ZIndex = 10,
+        Parent = self.MainContainer
+    })
+    
+    -- Create panel container
+    self.PanelContainer = Utilities.UIFactory:CreateFrame({
+        Name = "PanelContainer",
+        Position = UDim2.new(1, 0, 0, 0), -- Start off-screen
+        Size = UDim2.new(0.3, 0, 1, 0),
+        BackgroundColor3 = Theme.Colors.Background,
+        BorderSizePixel = 0,
+        ZIndex = 11,
+        Parent = self.MainContainer
+    })
+    
+    -- Apply corner radius
+    Utilities.UIFactory:ApplyCornerRadius(self.PanelContainer, Theme.CornerRadius)
+    
+    -- Create header
+    self.Header = Utilities.UIFactory:CreateFrame({
+        Name = "Header",
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 60),
+        BackgroundColor3 = Theme.Colors.Primary,
+        BorderSizePixel = 0,
+        ZIndex = 12,
+        Parent = self.PanelContainer
+    })
+    
+    -- Apply corner radius to top corners only
+    Utilities.UIFactory:ApplyCornerRadius(self.Header, Theme.CornerRadius, true, true, false, false)
+    
+    -- Add title
+    self.Title = Utilities.UIFactory:CreateTextLabel({
+        Name = "Title",
+        Position = UDim2.new(0, 16, 0, 0),
+        Size = UDim2.new(1, -32, 1, 0),
+        Text = "Admin Panel",
+        TextColor3 = Theme.Colors.White,
+        TextSize = Theme.FontSizes.Title,
+        Font = Theme.Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundTransparency = 1,
+        ZIndex = 13,
+        Parent = self.Header
+    })
+    
+    -- Add close button
+    self.CloseButton = Utilities.UIFactory:CreateTextButton({
+        Name = "CloseButton",
+        Position = UDim2.new(1, -40, 0, 15),
+        Size = UDim2.new(0, 30, 0, 30),
+        Text = "×",
+        TextColor3 = Theme.Colors.White,
+        TextSize = 24,
+        Font = Theme.Fonts.Bold,
+        BackgroundColor3 = Theme.Colors.Error,
+        ZIndex = 13,
+        Parent = self.Header
+    })
+    
+    Utilities.UIFactory:ApplyCornerRadius(self.CloseButton, Theme.CornerRadius)
+    
+    -- Create content container
+    self.ContentContainer = Utilities.UIFactory:CreateFrame({
+        Name = "ContentContainer",
+        Position = UDim2.new(0, 0, 0, 60),
+        Size = UDim2.new(1, 0, 1, -60),
+        BackgroundTransparency = 1,
+        ZIndex = 12,
+        Parent = self.PanelContainer
+    })
+    
+    -- Create tab buttons container
+    self.TabButtonsContainer = Utilities.UIFactory:CreateFrame({
+        Name = "TabButtonsContainer",
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 50),
+        BackgroundColor3 = Theme.Colors.Secondary,
+        BorderSizePixel = 0,
+        ZIndex = 12,
+        Parent = self.ContentContainer
+    })
+    
+    -- Initialize tabs
+    self.Tabs = {
+        { name = "Players", icon = "👥" },
+        { name = "Commands", icon = "⚡" },
+        { name = "Logs", icon = "📋" },
+        { name = "Settings", icon = "⚙️" }
+    }
+    
+    self.TabButtons = {}
+    self.TabContents = {}
+    self.ActiveTab = "Players"
+    
+    -- Create tab buttons
+    local tabWidth = 1 / #self.Tabs
+    for i, tab in ipairs(self.Tabs) do
+        local button = Utilities.UIFactory:CreateTextButton({
+            Name = tab.name .. "Button",
+            Position = UDim2.new(tabWidth * (i - 1), 0, 0, 0),
+            Size = UDim2.new(tabWidth, 0, 1, 0),
+            Text = tab.icon .. " " .. tab.name,
+            TextColor3 = Theme.Colors.White,
+            TextSize = Theme.FontSizes.Button,
+            Font = Theme.Fonts.Regular,
+            BackgroundTransparency = 1,
+            ZIndex = 13,
+            Parent = self.TabButtonsContainer
+        })
+        
+        self.TabButtons[tab.name] = button
+        
+        -- Create tab content container
+        local content = Utilities.UIFactory:CreateScrollingFrame({
+            Name = tab.name .. "Content",
+            Position = UDim2.new(0, 0, 0, 50),
+            Size = UDim2.new(1, 0, 1, -100), -- Make room for command bar
+            BackgroundTransparency = 1,
+            Visible = tab.name == self.ActiveTab,
+            ZIndex = 12,
+            Parent = self.ContentContainer
+        })
+        
+        self.TabContents[tab.name] = content
+        
+        -- Connect button click
+        button.MouseButton1Click:Connect(function()
+            self:SwitchTab(tab.name)
+        end)
+    end
+    
+    -- Update active tab visual
+    self:UpdateTabButtonsState()
+    
+    -- Initialize components
+    self.CommandBarInstance = CommandBar:Create(self.ContentContainer)
+    self.PlayerListInstance = PlayerList:Create(self.TabContents.Players)
+    self.CommandListInstance = CommandList:Create(self.TabContents.Commands)
+    self.ActivityLogInstance = ActivityLog:Create(self.TabContents.Logs)
+    self.SettingsInstance = Settings:Create(self.TabContents.Settings)
+    self.NotificationsInstance = Notifications:Create(self.ScreenGui)
+    
+    -- Make main UI globally accessible
+    _G.AdminPanelMainUI = self
+    
+    -- Connect close button
+    self.CloseButton.MouseButton1Click:Connect(function()
+        self:TogglePanel(false)
+    end)
+    
+    -- Set up toggle hotkey
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.Semicolon then
+            self:TogglePanel()
+        end
+    end)
+    
+    -- Show a welcome notification
+    task.wait(1)
+    self.NotificationsInstance:Show({
+        title = "Admin Panel",
+        message = "Press ; to toggle the admin panel",
+        type = "info"
+    })
+    
+    return self
+end
+
+function MainUI:SwitchTab(tabName)
+    if self.ActiveTab == tabName then return end
+    
+    -- Hide current tab
+    self.TabContents[self.ActiveTab].Visible = false
+    
+    -- Show new tab
+    self.ActiveTab = tabName
+    self.TabContents[self.ActiveTab].Visible = true
+    
+    -- Update tab buttons
+    self:UpdateTabButtonsState()
+end
+
+function MainUI:UpdateTabButtonsState()
+    for name, button in pairs(self.TabButtons) do
+        if name == self.ActiveTab then
+            button.BackgroundTransparency = 0
+            button.BackgroundColor3 = Theme.Colors.Primary
+            button.Font = Theme.Fonts.Bold
+        else
+            button.BackgroundTransparency = 1
+            button.Font = Theme.Fonts.Regular
+        end
+    end
+end
+
+function MainUI:TogglePanel(forceState)
+    local isOpen = self.PanelContainer.Position.X.Scale < 1
+    local shouldOpen = forceState ~= nil and forceState or not isOpen
+    
+    if shouldOpen then
+        -- Open panel
+        Utilities.Animations:SlideIn(self.PanelContainer)
+        Utilities.Animations:FadeIn(self.Backdrop)
+    else
+        -- Close panel
+        Utilities.Animations:SlideOut(self.PanelContainer)
+        Utilities.Animations:FadeOut(self.Backdrop)
+    end
+end
+
+-- Initialize the admin panel
+local AdminPanel = MainUI:Initialize()
+
+-- Show a welcome notification after a short delay
+task.wait(2)
+if _G.AdminPanelNotifications then
+    _G.AdminPanelNotifications:Show({
+        title = "Welcome to Admin Panel",
+        message = "This is a visual demo. Press ; to toggle the panel.",
+        type = "success"
+    })
+end
+
+return AdminPanel
